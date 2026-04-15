@@ -40,7 +40,7 @@ gbc-dashboard/
 ```bash
 cd scripts
 npm install
-node 1_upload_to_retailcrm.js
+node 1_upload_to_retailcrm.js 
 ```
 
 Скрипт загрузит все 50 заказов через API RetailCRM. Должно занять ~20 секунд.
@@ -56,7 +56,7 @@ node 1_upload_to_retailcrm.js
 **3б. Синхронизируй заказы:**
 
 ```bash
-node 2_sync_to_supabase.js
+node --env-file=../.env 2_sync_to_supabase.js
 ```
 
 ---
@@ -76,11 +76,14 @@ const SUPABASE_ANON_KEY = 'ТВОЙ_SUPABASE_ANON_KEY';
 
 ```bash
 npm install -g vercel
+
+node --env-file=../.env 2_sync_to_supabase.js - синхронизация с супабэйз
+
 cd dashboard
 vercel --prod
 ```
 
-Vercel спросит несколько вопросов → жми Enter на все. В конце даст ссылку.
+Vercel спросит несколько вопросов → жми Enter на все. В конце даст ссылку. https://gbc-dashboard-flax.vercel.app
 
 ---
 

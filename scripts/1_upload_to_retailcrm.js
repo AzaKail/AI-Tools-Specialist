@@ -1,17 +1,23 @@
-// ШАГ 2: Загрузка заказов в RetailCRM
-// Запуск: node 1_upload_to_retailcrm.js
-
 import fetch from "node-fetch";
-import orders from "./mock_orders.json" assert { type: "json" };
+import { createRequire } from "module";
+import { config } from "dotenv";
 
-const CRM_URL = process.env.CRM_URL; // https://yourdomain.retailcrm.ru
-const CRM_KEY = process.env.CRM_KEY; // API-ключ из RetailCRM
+config({ path: "../.env" });
+
+const require = createRequire(import.meta.url);
+const orders = require("./mock_orders.json");
+
+const CRM_URL = process.env.CRM_URL;
+const CRM_KEY = process.env.CRM_KEY;
 
 async function createOrder(order) {
+  // Убираем поля которых нет в демо-CRM
+  const { orderType, orderMethod, ...cleanOrder } = order;
+
   const body = new URLSearchParams({
     apiKey: CRM_KEY,
-    order: JSON.stringify(order),
-    site: "main", // slug вашего сайта в RetailCRM
+    order: JSON.stringify(cleanOrder),
+    site: "main",
   });
 
   const res = await fetch(`${CRM_URL}/api/v5/orders/create`, {
@@ -34,7 +40,6 @@ async function main() {
       const id = await createOrder(order);
       console.log(`[${i + 1}/${orders.length}] ✅ Создан заказ #${id}`);
       ok++;
-      // Пауза чтобы не словить rate limit
       await new Promise((r) => setTimeout(r, 300));
     } catch (e) {
       console.error(`[${i + 1}/${orders.length}] ❌ Ошибка:`, e.message);
