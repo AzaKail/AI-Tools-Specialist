@@ -98,7 +98,7 @@ Vercel спросит несколько вопросов → жми Enter на 
 1. Зайди на [railway.app](https://railway.app) → New Project → Deploy from GitHub
 2. Загрузи папку `telegram-bot` в GitHub
 3. В Railway добавь переменные окружения из `.env`
-4. Получи публичный URL сервиса (Settings → Networking → Generate Domain)
+4. Получи публичный URL сервиса (Settings → Networking → Generate Domain) ai-tools-specialist-production.up.railway.app
 
 **5в. Настрой вебхук в RetailCRM:**
 
