@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GBC Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;700&family=Onest:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --border: #1e1e2e;
+      --accent: #c8f04d;
+      --accent2: #ff6b6b;
+      --accent3: #6baaff;
+      --text: #e8e8f0;
+      --muted: #5a5a7a;
+      --card-bg: #13131c;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Onest', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grain texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    header {
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .logo {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    .logo span {
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    .live-dot {
+      width: 8px; height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+      margin-left: auto;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .live-label {
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    main {
+      padding: 32px 40px;
+      max-width: 1400px;
+    }
+
+    /* KPI row */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .kpi {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s, transform 0.5s;
+    }
+
+    .kpi.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    .kpi::after {
+      content: '';
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: var(--kpi-color, var(--accent));
+      opacity: 0.06;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .kpi-value {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--kpi-color, var(--accent));
+    }
+
+    .kpi-sub {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Charts grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s, transform 0.6s;
+    }
+
+    .chart-card.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    .chart-card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .card-title {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    canvas { max-height: 260px; }
+
+    /* Orders table */
+    .table-wrap {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.7s, transform 0.7s;
+    }
+
+    .table-wrap.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    .table-header {
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 500;
+      padding: 14px 20px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 500;
+      background: rgba(200, 240, 77, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(200, 240, 77, 0.2);
+    }
+
+    .badge.hot {
+      background: rgba(255, 107, 107, 0.1);
+      color: var(--accent2);
+      border-color: rgba(255, 107, 107, 0.2);
+    }
+
+    .amount {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .amount.big { color: var(--accent2); }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 900px) {
+      main, header { padding: 20px; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GBC<span> / Analytics</span></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+    <div class="live-dot"></div>
+    <span class="live-label">Live</span>
+  </div>
+</header>
+
+<main>
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <span>Загружаю данные...</span>
+  </div>
+
+  <div id="app" style="display:none">
+
+    <!-- KPI -->
+    <div class="kpi-grid">
+      <div class="kpi" style="--kpi-color: var(--accent)">
+        <div class="kpi-label">Всего заказов</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-sub">из RetailCRM</div>
+      </div>
+      <div class="kpi" style="--kpi-color: #c084fc">
+        <div class="kpi-label">Общая выручка</div>
+        <div class="kpi-value" id="kpi-revenue">—</div>
+        <div class="kpi-sub">тенге</div>
+      </div>
+      <div class="kpi" style="--kpi-color: var(--accent3)">
+        <div class="kpi-label">Средний чек</div>
+        <div class="kpi-value" id="kpi-avg">—</div>
+        <div class="kpi-sub">тенге</div>
+      </div>
+      <div class="kpi" style="--kpi-color: var(--accent2)">
+        <div class="kpi-label">Крупных заказов</div>
+        <div class="kpi-value" id="kpi-big">—</div>
+        <div class="kpi-sub">свыше 50 000 ₸</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="card-title">Источники трафика</div>
+        <canvas id="chartUTM"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="card-title">Заказы по городам</div>
+        <canvas id="chartCities"></canvas>
+      </div>
+      <div class="chart-card wide">
+        <div class="card-title">Распределение по сумме заказа</div>
+        <canvas id="chartAmounts"></canvas>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="card-title" style="margin:0">Последние заказы</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Клиент</th>
+            <th>Город</th>
+            <th>Источник</th>
+            <th>Товары</th>
+            <th>Сумма</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  // ——— КОНФИГ — замени на свои значения ———
+  const SUPABASE_URL = 'ТВОЙ_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'ТВОЙ_SUPABASE_ANON_KEY';
+  // ——————————————————————————————————————
+
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const fmt = (n) =>
+    new Intl.NumberFormat('ru-KZ', { maximumFractionDigits: 0 }).format(n);
+
+  const utmEmoji = { instagram: '📸', tiktok: '🎵', google: '🔍', direct: '🔗', referral: '👥' };
+  const chartColors = ['#c8f04d', '#ff6b6b', '#6baaff', '#c084fc', '#fb923c', '#34d399'];
+
+  async function load() {
+    const { data: orders, error } = await db
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      document.getElementById('loading').innerHTML =
+        `<div style="color:#ff6b6b">Ошибка загрузки: ${error.message}</div>`;
+      return;
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+
+    renderKPIs(orders);
+    renderCharts(orders);
+    renderTable(orders.slice(0, 20));
+
+    // Анимация появления
+    setTimeout(() => {
+      document.querySelectorAll('.kpi, .chart-card, .table-wrap').forEach((el, i) => {
+        setTimeout(() => el.classList.add('visible'), i * 80);
+      });
+    }, 50);
+
+    // Realtime обновления
+    db.channel('orders').on('postgres_changes',
+      { event: '*', schema: 'public', table: 'orders' },
+      () => load()
+    ).subscribe();
+  }
+
+  function renderKPIs(orders) {
+    const total = orders.length;
+    const revenue = orders.reduce((s, o) => s + (o.total_price || 0), 0);
+    const avg = total ? Math.round(revenue / total) : 0;
+    const big = orders.filter(o => o.total_price > 50000).length;
+
+    document.getElementById('kpi-total').textContent = total;
+    document.getElementById('kpi-revenue').textContent = fmt(revenue);
+    document.getElementById('kpi-avg').textContent = fmt(avg);
+    document.getElementById('kpi-big').textContent = big;
+  }
+
+  function renderCharts(orders) {
+    const defaults = {
+      plugins: { legend: { labels: { color: '#5a5a7a', font: { family: 'Onest' } } } }
+    };
+
+    // UTM
+    const utmMap = {};
+    orders.forEach(o => { utmMap[o.utm_source || 'direct'] = (utmMap[o.utm_source || 'direct'] || 0) + 1; });
+    const utmSorted = Object.entries(utmMap).sort((a, b) => b[1] - a[1]);
+
+    new Chart(document.getElementById('chartUTM'), {
+      type: 'doughnut',
+      data: {
+        labels: utmSorted.map(([k]) => `${utmEmoji[k] || '📦'} ${k}`),
+        datasets: [{ data: utmSorted.map(([, v]) => v), backgroundColor: chartColors, borderWidth: 0, hoverOffset: 8 }]
+      },
+      options: { ...defaults, cutout: '65%' }
+    });
+
+    // Cities
+    const cityMap = {};
+    orders.forEach(o => { cityMap[o.city || '—'] = (cityMap[o.city || '—'] || 0) + 1; });
+    const citySorted = Object.entries(cityMap).sort((a, b) => b[1] - a[1]);
+
+    new Chart(document.getElementById('chartCities'), {
+      type: 'bar',
+      data: {
+        labels: citySorted.map(([k]) => k),
+        datasets: [{
+          data: citySorted.map(([, v]) => v),
+          backgroundColor: chartColors,
+          borderRadius: 8,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        ...defaults,
+        scales: {
+          x: { ticks: { color: '#5a5a7a' }, grid: { color: '#1e1e2e' } },
+          y: { ticks: { color: '#5a5a7a' }, grid: { color: '#1e1e2e' } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Amount distribution (histogram)
+    const buckets = [
+      { label: '< 20к', min: 0, max: 20000 },
+      { label: '20–40к', min: 20000, max: 40000 },
+      { label: '40–60к', min: 40000, max: 60000 },
+      { label: '60–80к', min: 60000, max: 80000 },
+      { label: '80к+', min: 80000, max: Infinity },
+    ];
+    const bucketCounts = buckets.map(b => orders.filter(o => o.total_price >= b.min && o.total_price < b.max).length);
+
+    new Chart(document.getElementById('chartAmounts'), {
+      type: 'bar',
+      data: {
+        labels: buckets.map(b => b.label),
+        datasets: [{
+          label: 'Заказов',
+          data: bucketCounts,
+          backgroundColor: buckets.map((_, i) => i >= 2 ? '#ff6b6b66' : '#c8f04d66'),
+          borderColor: buckets.map((_, i) => i >= 2 ? '#ff6b6b' : '#c8f04d'),
+          borderWidth: 1,
+          borderRadius: 8,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        ...defaults,
+        scales: {
+          x: { ticks: { color: '#5a5a7a' }, grid: { color: '#1e1e2e' } },
+          y: { ticks: { color: '#5a5a7a' }, grid: { color: '#1e1e2e' } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  function renderTable(orders) {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = orders.map(o => {
+      const items = JSON.parse(o.items_json || '[]');
+      const isBig = o.total_price > 50000;
+      const utm = o.utm_source || 'direct';
+      return `
+        <tr>
+          <td style="color:var(--muted)">#${o.number || o.crm_id}</td>
+          <td>${o.first_name} ${o.last_name}</td>
+          <td>${o.city || '—'}</td>
+          <td><span class="badge">${utmEmoji[utm] || '📦'} ${utm}</span></td>
+          <td style="color:var(--muted)">${items.map(i => i.productName).join(', ')}</td>
+          <td><span class="amount ${isBig ? 'big' : ''}">${fmt(o.total_price)} ₸ ${isBig ? '🔥' : ''}</span></td>
+        </tr>`;
+    }).join('');
+  }
+
+  load();
+</script>
+</body>
+</html>
